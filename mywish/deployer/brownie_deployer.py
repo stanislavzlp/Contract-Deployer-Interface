@@ -7,14 +7,14 @@ from typing import List, Union
 
 import yaml
 from brownie import accounts
-from brownie.network.contract import ContractContainer, ProjectContract
+from brownie.network.contract import ProjectContract
 from brownie.network.transaction import TransactionReceipt
 from brownie.project.main import Project, new
 from brownie.project import run
 
-from deployer.common_dataclasses import Config
-from deployer.exeptions import DeployError, ErrorCodes
-from deployer.interface import IDeployer
+from mywish.deployer.common_dataclasses import Config
+from mywish.deployer.exeptions import DeployError, ErrorCodes
+from mywish.deployer.interface import IDeployer
 
 
 class BrownieDeployer(IDeployer):
@@ -30,23 +30,28 @@ class BrownieDeployer(IDeployer):
             account_pass,
             private_key,
             contract_name,
+            etherscan_api_token,
             provider: str = None,
             provider_id: str = None,
-            constructor_parasms: List[str] = None,
+            constructor_params: List[str] = None,
             config: Config = None,
-    ) -> ProjectContract:
+    ) -> str:
         """
         Creates user if needed, create project, compile contract code and deploy
 
-        param: str contract_code: Full smart contract code
-        param: str account_name: The name of the account that will be used when deploying contracts
-        param: str account_pass: The name of the account that will be used when deploying contracts
-        param: str private_key: The private of the account that will be used when deploying contracts
-        param: str network: Network
-        param: str contract_name:
-        param: str provider:
-        param: str provider_id:
-        param: str constructor_parasms:
+        :param contract_code: Full smart contract code
+        :param account_name: The name of the account that will be used when deploying contracts
+        :param account_pass: The name of the account that will be used when deploying contracts
+        :param private_key: The private of the account that will be used when deploying contracts
+        :param network: Network where contract will be deployed
+        :param contract_name: Contract name which will be used in deployment script
+        :param etherscan_api_token: Developer Etherscan API token
+        :param provider: Provider to use if network needs provider
+        :param provider_id: Provider ID
+        :param constructor_params: Params which will be used in contract deployment
+        :param config: Dataclass with all configurations for brownie projects
+
+        :return: Deployed contract address
         """
 
         with TemporaryDirectory() as tmp_dir:
@@ -72,11 +77,12 @@ class BrownieDeployer(IDeployer):
                 network,
                 account_name,
                 account_pass,
-                constructor_parasms,
+                constructor_params,
             )
 
             self._set_provider_if_need(provider, provider_id)
 
+            self._set_etherscan_api_token(etherscan_api_token)
             try:
                 run(script_path=script_path, project=project_dir)
             except Exception as e:
@@ -91,10 +97,17 @@ class BrownieDeployer(IDeployer):
             network: str,
             account_name: str,
             account_pass: str,
-    ):
+    ) -> str:
         """
         Creates script code for contract without constructor and
         returns it
+
+        :param contract_name: Contract name which will be used in deployment script
+        :param network: Network where contract will be deployed
+        :param account_name: The name of the account that will be used when deploying contracts
+        :param account_pass: The name of the account that will be used when deploying contracts
+
+        :return: Scripts code for contract deployment script.py
         """
 
         script = '''
@@ -110,7 +123,7 @@ def main():
     else:
         network.connect('{1}')
     accounts.load("{2}", password='{3}')
-    token = {4}.deploy({5})
+    token = {4}.deploy({5}, publish_source=True)
     var = ContextVar('token')
     var.set(token)
 '''.format(
@@ -119,7 +132,8 @@ def main():
             account_name,
             account_pass,
             contract_name,
-            '{\'from\': accounts[0]}'
+            '{\'from\': accounts[0]}',
+            contract_name,
         )
         return script
 
@@ -129,11 +143,19 @@ def main():
             network: str,
             account_name: str,
             account_pass: str,
-            constructor_parasms: List,
+            constructor_params: List,
     ) -> str:
         """
         Creates script code for contract with constructor and
         returns it
+
+        :param contract_name: Contract name which will be used in deployment script
+        :param network: Network where contract will be deployed
+        :param account_name: The name of the account that will be used when deploying contracts
+        :param account_pass: The name of the account that will be used when deploying contracts
+        :param constructor_params: List of contract constructor parameters
+
+        :return: Scripts code for contract deployment script.py
         """
         script = '''
 from brownie import {0}, accounts
@@ -148,7 +170,7 @@ def main():
     else:
         network.connect('{1}')
     accounts.load("{2}", password='{3}')
-    token = {4}.deploy({5}, {6})
+    token = {4}.deploy({5}, {6}, publish_source=True)
     var = ContextVar('token')
     var.set(token)
 '''.format(
@@ -157,8 +179,8 @@ def main():
             account_name,
             account_pass,
             contract_name,
-            ','.join(constructor_parasms),
-            '{\'from\': accounts[0]}'
+            ','.join(constructor_params),
+            '{\'from\': accounts[0]}',
         )
         return script
 
@@ -169,19 +191,28 @@ def main():
             network: str,
             account_name: str,
             account_pass: str,
-            constructor_parasms: List = None,
+            constructor_params: List = None,
     ) -> str:
         """
         Creates .py file with script for deploy and returns its path as str
+
+        :param project_dir: tmp brownie project directory
+        :param contract_name: Contract name which will be used in deployment script
+        :param network: Network where contract will be deployed
+        :param account_name: The name of the account that will be used when deploying contracts
+        :param account_pass: The name of the account that will be used when deploying contracts
+        :param constructor_params: List of contract constructor parameters
+
+        :return: Path to the deployments script in tmp brownie project
         """
 
-        if constructor_parasms:
+        if constructor_params:
             contract_deploy_script_code = self._get_contract_deploy_with_constructor_script_code(
                 contract_name,
                 network,
                 account_name,
                 account_pass,
-                constructor_parasms,
+                constructor_params,
             )
         else:
             contract_deploy_script_code = self._get_contract_deploy_script_code(
@@ -202,6 +233,10 @@ def main():
         does nothing and returns
 
         Brownie stores account data in the dir ~/.brownie/accounts/
+
+        :param private_key: The private of the account that will be used when deploying contracts
+        :param name: The name of the account that will be used when deploying contracts
+        :param password: The name of the account that will be used when deploying contracts
         """
         try:
             a = accounts.add(private_key)
@@ -214,6 +249,9 @@ def main():
     def _create_token_file(self, project_dir: Path, contract_code: str) -> None:
         """
         Creates file with contract code in the project directory
+
+        :param project_dir: tmp brownie project directory
+        :param contract_code: Full smart contract code
         """
         with open(f'{project_dir}/contracts/token.sol', "w") as new_token:
             new_token.write(contract_code)
@@ -222,6 +260,9 @@ def main():
         """
         Adds provider for Ethereum to the environment variables,
         raise Error if there is _provider but not _provider_id
+
+        :param provider: Provider to use if network needs provider
+        :param provider_id: Provider ID
         """
         if provider:
             if provider_id:
@@ -231,7 +272,10 @@ def main():
 
     def _get_token_variable_from_context(self) -> str:
         """
-        Loads context and returns token from deployer script.
+        Loads context and returns token from deployer script. Raise exception if
+        token_var is not ProjectContract
+
+        :return: Token contract address
         """
         token_var = None
         ctx: Context = copy_context()
@@ -249,6 +293,9 @@ def main():
     def _create_project_config_file(self, project_dir: Path, config: Union[Config, None]) -> None:
         """
         Creates brownie configuration file in the project directory
+
+        :param project_dir: tmp brownie project directory
+        :param config: Dataclass with all configurations for brownie projects
         """
         if config:
             config_dict = asdict(config)
@@ -257,3 +304,12 @@ def main():
 
         with open(f'{project_dir}/brownie-config.yaml', "w") as config_file:
             yaml.dump(config_dict, config_file)
+
+    def _set_etherscan_api_token(self, etherscan_api_token: str) -> None:
+        """
+        Adds etherscan api token for contract code verification to
+        the environment variables
+
+        :param etherscan_api_token: Developer Etherscan API token
+        """
+        os.environ['ETHERSCAN_TOKEN'] = etherscan_api_token
