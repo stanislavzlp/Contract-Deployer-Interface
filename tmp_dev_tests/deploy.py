@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import dotenv
 
-from mywish.deployer import BrownieDeployer
+from mywish import BrownieDeployer
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 dotenv_file = os.path.join(BASE_DIR, ".env")
