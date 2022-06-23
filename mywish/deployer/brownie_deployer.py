@@ -54,6 +54,8 @@ class BrownieDeployer(IDeployer):
         :return: Deployed contract address
         """
 
+        self._add_new_account_to_project(private_key, account_name, account_pass)
+
         with TemporaryDirectory() as tmp_dir:
 
             project_dir = Path(tmp_dir)
@@ -227,7 +229,7 @@ def main():
 
         return str(Path(f'{project_dir}/scripts/main.py'))
 
-    def _add_new_account_to_project(self, private_key: str, name: str, password: str) -> None:
+    def _add_new_account_to_project(self, private_key: str, account_name: str, account_pass: str) -> None:
         """
         Adds new account to the project. If account already exists
         does nothing and returns
@@ -240,7 +242,7 @@ def main():
         """
         try:
             a = accounts.add(private_key)
-            a.save(name, password=password)
+            a.save(account_name, password=account_pass)
         except FileExistsError:
             return
         except Exception as e:

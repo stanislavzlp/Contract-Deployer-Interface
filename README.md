@@ -72,6 +72,11 @@ which must be strings in params of constructor must be surrounded by double quot
 constructor_params = ['\'{some_address}\'']
 ```
 
+### Brownie account settings
+`account_name` and `account_pass` are name and password for brownie account associated with
+private key. Brownie-deployer will automatically create new account with given attributes if it does not
+exist. Brownie account data stored in dir `~/.brownie/....` 
+
 For now brownie deployer is useful only for Ethereum network. In future, we will add support of others networks.
 
 ## IDeployer interface
