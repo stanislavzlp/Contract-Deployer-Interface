@@ -1,0 +1,8 @@
+env
+venv
+.env
+mywish/deployer/__pycache__/
+/__pycache__/
+.idea/
+mywish_deployer.egg-info
+dist
